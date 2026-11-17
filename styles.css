@@ -78,3 +78,7 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
 .platform-preview .hint{margin:12px 0 0;line-height:1.5}
 #loadUrl{min-width:132px}
 @media(max-width:600px){.platform-preview{padding:11px}.platform-preview-heading{align-items:flex-start;flex-direction:column;gap:4px}.platform-frame-wrap{aspect-ratio:9/16;max-width:360px}}
+
+/* Downloader-only layout: keep legacy elements in the DOM for safe JS initialization. */
+#lyrics, .platforms { display: none !important; }
+.brand-nav a { font-size: 12px; }
