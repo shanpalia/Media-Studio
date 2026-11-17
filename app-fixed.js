@@ -79,8 +79,9 @@ function setFile(blob, name) {
 document.querySelectorAll('.tab').forEach((button) => {
   button.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab === button));
-    $('filePanel').classList.toggle('hidden', button.dataset.tab !== 'file');
-    $('urlPanel').classList.toggle('hidden', button.dataset.tab !== 'url');
+    if (button.dataset.tab === 'url') { window.location.href = './url-downloader.html'; return; }
+    $('filePanel').classList.remove('hidden');
+    $('urlPanel').classList.add('hidden');
   });
 });
 
