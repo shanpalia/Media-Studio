@@ -22,7 +22,7 @@ app.add_middleware(
 ALLOWED = {
     "youtube.com", "youtu.be", "instagram.com", "facebook.com", "fb.watch",
     "tiktok.com", "threads.net", "threads.com", "pinterest.com", "pin.it",
-    "x.com", "twitter.com",
+    "x.com", "twitter.com", "vimeo.com",
 }
 
 
