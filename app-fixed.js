@@ -299,7 +299,7 @@ async function getWhisperPipeline() {
       .then(({ pipeline, env }) => {
         env.allowLocalModels = false;
         env.useBrowserCache = true;
-        return pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', {
+        return pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', {
           dtype: 'q8',
           device: 'wasm',
           progress_callback: (event) => {
@@ -400,9 +400,14 @@ $('generateLyrics').addEventListener('click', async () => {
     if (language !== 'auto') options.language = language;
     const result = await transcriber(audio, options);
     const text = cleanWhisperRepetition(result.text || '');
-    if (!text) throw new Error('No clear words were recognized. Music vocals may be difficult for AI to understand.');
+    if (!text) throw new Error('No clear words were recognized. Try a clearer audio file.');
+    const latinLetters = (text.match(/[A-Za-z]/g) || []).length;
+    const devanagariLetters = (text.match(/[\\u0900-\\u097F]/g) || []).length;
+    if (language === 'hindi' && latinLetters > devanagariLetters * 1.5 && latinLetters > 12) {
+      throw new Error('Hindi was selected, but the model returned mostly English text. This audio may contain English speech, or the free model could not recognize the Hindi vocals. Try Auto detect or a clearer audio clip.');
+    }
     $('lyricsText').value = text;
-    $('aiLyricsStatus').textContent = 'Lyrics generated successfully. You can edit the text in the box above.';
+    $('aiLyricsStatus').textContent = 'Transcription ready. Please review the words; music lyrics may need manual correction.';
   } catch (error) {
     $('aiLyricsStatus').textContent = 'Could not generate lyrics: ' + error.message;
   } finally {
