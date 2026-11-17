@@ -295,86 +295,8 @@ $('convertBtn').addEventListener('click', async () => {
   }
 });
 
-let whisperPipelinePromise = null;
-async function getWhisperPipeline() {
-  if (!whisperPipelinePromise) {
-    whisperPipelinePromise = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2')
-      .then(({ pipeline, env }) => {
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-        return pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', {
-          dtype: 'q8',
-          device: 'wasm',
-          progress_callback: (event) => {
-            if (event.status === 'progress' && event.total) {
-              const pct = Math.round((event.loaded / event.total) * 100);
-              $('aiLyricsStatus').textContent = 'Downloading free AI model: ' + pct + '%';
-            } else if (event.status === 'done') {
-              $('aiLyricsStatus').textContent = 'AI model ready. Preparing audio…';
-            }
-          }
-        });
-      }).catch((error) => { whisperPipelinePromise = null; throw error; });
-  }
-  return whisperPipelinePromise;
-}
-
-function cleanWhisperRepetition(raw) {
-  const words = raw.replace(/\\s+/g, ' ').trim().split(' ');
-  if (words.length < 12) return raw.trim();
-  // Whisper can loop a short phrase repeatedly on music. Keep at most two
-  // consecutive copies of the same phrase when the loop is clearly runaway.
-  for (let size = 3; size <= Math.min(18, Math.floor(words.length / 3)); size++) {
-    let bestStart = -1;
-    let bestRepeats = 0;
-    for (let start = 0; start + size * 3 <= words.length; start++) {
-      let repeats = 1;
-      while (start + (repeats + 1) * size <= words.length) {
-        const a = words.slice(start, start + size).join(' ').toLowerCase();
-        const b = words.slice(start + repeats * size, start + (repeats + 1) * size).join(' ').toLowerCase();
-        if (a !== b) break;
-        repeats++;
-      }
-      if (repeats > bestRepeats) {
-        bestRepeats = repeats;
-        bestStart = start;
-      }
-    }
-    if (bestRepeats >= 4 && bestStart >= 0) {
-      words.splice(bestStart + size * 2, size * (bestRepeats - 2));
-      break;
-    }
-  }
-  return words.join(' ').trim();
-}
-
-async function getMonoAudio16k(blob) {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) throw new Error('This browser cannot decode audio.');
-  const context = new AudioContextClass();
-  try {
-    const decoded = await context.decodeAudioData(await blob.arrayBuffer());
-    selectedDuration = decoded.duration;
-    const targetRate = 16000;
-    const length = Math.ceil(decoded.duration * targetRate);
-    if (length > targetRate * 600) throw new Error('For this free mobile model, please use media shorter than 10 minutes.');
-    const mono = new Float32Array(length);
-    const channels = decoded.numberOfChannels;
-    for (let ch = 0; ch < channels; ch++) {
-      const source = decoded.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-        const sourceIndex = i * decoded.sampleRate / targetRate;
-        const left = Math.floor(sourceIndex);
-        const fraction = sourceIndex - left;
-        const a = source[Math.min(left, source.length - 1)] || 0;
-        const b = source[Math.min(left + 1, source.length - 1)] || 0;
-        mono[i] += (a + (b - a) * fraction) / channels;
-      }
-    }
-    return mono;
-  } finally {
-    await context.close();
-  }
+function cleanTranscript(raw) {
+  return String(raw || '').replace(/[ \\t]+/g, ' ').replace(/\\n{3,}/g, '\\n\\n').trim();
 }
 
 $('generateLyrics').addEventListener('click', async () => {
@@ -383,47 +305,37 @@ $('generateLyrics').addEventListener('click', async () => {
     return;
   }
   const button = $('generateLyrics');
+  if (selectedBlob.size > 25 * 1024 * 1024) {
+    $('aiLyricsStatus').textContent = 'This free transcription endpoint accepts files up to 25 MB. Please use a smaller audio/video file.';
+    return;
+  }
   button.disabled = true;
-  $('aiLyricsStatus').textContent = 'Starting free AI transcription…';
+  $('aiLyricsStatus').textContent = 'Sending audio to Whisper AI securely…';
   try {
-    const transcriber = await getWhisperPipeline();
-    $('aiLyricsStatus').textContent = 'Reading audio from your file…';
-    const audio = await getMonoAudio16k(selectedBlob);
-    const language = $('lyricsLanguage').value;
-    $('aiLyricsStatus').textContent = 'Recognizing speech locally…';
-    const options = {
-      chunk_length_s: 20,
-      stride_length_s: 4,
-      return_timestamps: false,
-      task: 'transcribe',
-      repetition_penalty: 1.15,
-      no_repeat_ngram_size: 3,
-      max_new_tokens: 192
-    };
-    if (language !== 'auto') options.language = language;
-    const result = await transcriber(audio, options);
-    const text = cleanWhisperRepetition(result.text || '');
-    if (!text) throw new Error('No clear words were recognized. Try a clearer audio file.');
-    const latinLetters = (text.match(/[A-Za-z]/g) || []).length;
-    const devanagariLetters = (text.match(/[\u0900-\u097F]/g) || []).length;
-    const tamilLetters = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
-    const arabicLetters = (text.match(/[\u0600-\u06FF]/g) || []).length;
-    const totalLetters = (text.match(/[\p{L}]/gu) || []).length;
-    if (language === 'hindi') {
-      const hindiShare = totalLetters ? devanagariLetters / totalLetters : 0;
-      if (devanagariLetters < 3 || hindiShare < 0.65 || tamilLetters > 0 || arabicLetters > 0 || latinLetters > devanagariLetters * 0.35) {
-        throw new Error('Hindi audio was not recognized correctly. The AI returned another script or unclear words, so the Lyrics box was left unchanged. Try a clearer Hindi speech clip; songs with loud music may not be recognized reliably.');
-      }
+    const form = new FormData();
+    const mime = selectedBlob.type || 'application/octet-stream';
+    const ext = (selectedName.split('.').pop() || 'audio').toLowerCase();
+    const allowed = ['mp3','mp4','mpeg','mpga','m4a','wav','ogg','webm','flac'];
+    const safeExt = allowed.includes(ext) ? ext : (mime.includes('mp4') ? 'mp4' : mime.includes('webm') ? 'webm' : mime.includes('ogg') ? 'ogg' : mime.includes('wav') ? 'wav' : 'mp3');
+    form.append('file', selectedBlob, 'media.' + safeExt);
+    $('aiLyricsStatus').textContent = 'Recognizing the spoken language automatically…';
+    const response = await fetch('https://media-studio.shanpalia786.workers.dev/api/transcribe', {
+      method: 'POST',
+      body: form
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 413) throw new Error('File is larger than 25 MB. Please choose a shorter or smaller file.');
+      if (response.status === 429) throw new Error('Free usage limit reached. Please wait and try again later.');
+      if (response.status === 503) throw new Error('Transcription service is not configured yet. Add the Groq API key to the Cloudflare Worker secret.');
+      throw new Error(data.error || 'Transcription request failed (' + response.status + ').');
     }
-    if (language === 'english' && latinLetters < 3) {
-      throw new Error('English was selected, but the AI did not return clear English text. Try a clearer clip or Auto detect.');
-    }
+    const text = cleanTranscript(data.text);
+    if (!text) throw new Error('No clear speech was recognized. Try a clearer clip with less background music.');
     $('lyricsText').value = text;
-    $('aiLyricsStatus').textContent = language === 'hindi'
-      ? 'Hindi transcription ready in Devanagari. Please review the words.'
-      : 'Transcription ready. Please review the words; music lyrics may need manual correction.';
+    $('aiLyricsStatus').textContent = 'Speech recognized automatically. Language: ' + (data.language || 'Auto detected') + '. Review the transcript below.';
   } catch (error) {
-    $('aiLyricsStatus').textContent = 'Could not generate lyrics: ' + error.message;
+    $('aiLyricsStatus').textContent = 'Could not generate text: ' + error.message;
   } finally {
     button.disabled = false;
   }
