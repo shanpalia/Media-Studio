@@ -221,6 +221,27 @@ function showSocialPreview(info) {
   box.classList.remove('hidden');
 }
 
+const urlMediaType = $('urlMediaType');
+if (urlMediaType) {
+  urlMediaType.addEventListener('change', () => {
+    const audio = urlMediaType.value === 'audio';
+    $('urlAudioSettings').classList.toggle('hidden', !audio);
+    $('urlVideoSettings').classList.toggle('hidden', audio);
+  });
+}
+$('urlDownloadBtn')?.addEventListener('click', () => {
+  if (!selectedBlob) {
+    $('platformNote').textContent = 'पहले direct media URL डालकर Load Media दबाएँ।';
+    $('platformNote').classList.remove('hidden');
+    return;
+  }
+  const audio = $('urlMediaType').value === 'audio';
+  $('format').value = audio ? 'mp3' : 'mp4';
+  $('quality').value = $('urlAudioQuality').value;
+  $('qualitySetting').classList.toggle('hidden', !audio);
+  $('convertBtn').click();
+});
+
 $('mediaUrl').addEventListener('input', () => {
   const platform = platformName($('mediaUrl').value.trim());
   $('platformNote').textContent = platform
@@ -266,7 +287,11 @@ $('loadUrl').addEventListener('click', async () => {
     }
     const fileName = decodeURIComponent(url.pathname.split('/').pop() || 'remote-media').replace(/[^a-zA-Z0-9._-]/g, '_');
     setFile(blob, fileName);
-    $('platformNote').textContent = 'Media URL loaded successfully. You can now preview or convert it.';
+    $('urlDownloadOptions').classList.remove('hidden');
+    const looksAudio = blob.type.startsWith('audio/') || /\\.(mp3|wav|m4a|aac|ogg|flac)(?:$|\\?)/i.test(url.pathname);
+    $('urlMediaType').value = looksAudio ? 'audio' : 'video';
+    $('urlMediaType').dispatchEvent(new Event('change'));
+    $('platformNote').textContent = 'Media loaded. Select audio/video format and quality below, then download.';
     $('platformPreview').classList.add('hidden');
   } catch (error) {
     $('platformNote').textContent = error.message + ' If this is a social link, make sure it is a full public video URL.';
@@ -377,7 +402,11 @@ $('convertBtn').addEventListener('click', async () => {
       await ensureFFmpegLoaded();
       $('progressText').textContent = 'Converting video…';
       await ffmpeg.writeFile(inputName, new Uint8Array(await selectedBlob.arrayBuffer()));
-      await ffmpeg.exec(['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-c:a', 'aac', '-movflags', '+faststart', outputName]);
+      const videoSize = $('urlVideoQuality')?.value || 'original';
+      const videoArgs = ['-i', inputName];
+      if (videoSize !== 'original') videoArgs.push('-vf', 'scale=-2:' + videoSize);
+      videoArgs.push('-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-c:a', 'aac', '-movflags', '+faststart', outputName);
+      await ffmpeg.exec(videoArgs);
       const data = await ffmpeg.readFile(outputName);
       blob = new Blob([data.buffer], { type: 'video/mp4' });
       await ffmpeg.deleteFile(inputName);
