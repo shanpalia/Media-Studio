@@ -140,7 +140,10 @@ def download(
         "-o", output,
     ]
     if kind == "audio":
-        args += ["-x", "--audio-format", "mp3", "--audio-quality", f"{audio_quality}K"]
+        if format_id:
+            args += ["-f", format_id]
+        else:
+            args += ["-x", "--audio-format", "mp3", "--audio-quality", f"{audio_quality}K"]
     else:
         selected_format = f"{format_id}+bestaudio/{format_id}" if format_id else f"bv*[height<={height}]+ba/b[height<={height}]/b"
         args += [
