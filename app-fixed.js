@@ -140,18 +140,24 @@ function socialVideoEmbed(value) {
   let platform = platformName(value);
   let embedUrl = '';
   if (platform === 'YouTube') {
-    // Accept watch, youtu.be, shorts, live, embed and mobile YouTube URLs.
-    let id = url.searchParams.get('v') || url.searchParams.get('vi') || '';
+    // Support both individual videos and playlist URLs.
     const parts = decodeURIComponent(url.pathname).split('/').filter(Boolean);
-    if (!id && (host === 'youtu.be' || host === 'www.youtu.be')) id = parts[0] || '';
-    if (!id && ['shorts', 'live', 'embed', 'v'].includes((parts[0] || '').toLowerCase())) id = parts[1] || '';
-    if (!id) {
-      const candidate = parts.find(part => /^[A-Za-z0-9_-]{11}$/.test(part));
-      if (candidate) id = candidate;
+    const playlistId = url.searchParams.get('list') || '';
+    let id = url.searchParams.get('v') || url.searchParams.get('vi') || '';
+    if (!id && playlistId && (parts[0] || '').toLowerCase() === 'playlist') {
+      if (!/^[A-Za-z0-9_-]+$/.test(playlistId)) throw new Error('YouTube playlist link सही नहीं है।');
+      embedUrl = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + encodeURIComponent(playlistId);
+    } else {
+      if (!id && (host === 'youtu.be' || host === 'www.youtu.be')) id = parts[0] || '';
+      if (!id && ['shorts', 'live', 'embed', 'v'].includes((parts[0] || '').toLowerCase())) id = parts[1] || '';
+      if (!id) {
+        const candidate = parts.find(part => /^[A-Za-z0-9_-]{11}$/.test(part));
+        if (candidate) id = candidate;
+      }
+      id = String(id).split(/[?&#]/)[0];
+      if (!/^[A-Za-z0-9_-]{11}$/.test(id)) throw new Error('YouTube video ID नहीं मिला। Watch link (youtube.com/watch?v=...), youtu.be, Shorts या Live का पूरा URL पेस्ट करें। Playlist link में playlist preview के लिए पूरा URL डालें।');
+      embedUrl = 'https://www.youtube-nocookie.com/embed/' + id;
     }
-    id = String(id).split(/[?&#]/)[0];
-    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) throw new Error('YouTube video ID नहीं मिला। Watch link (youtube.com/watch?v=...), youtu.be, Shorts या Live का पूरा URL पेस्ट करें। Playlist-only या channel link से video preview नहीं बन सकता।');
-    embedUrl = 'https://www.youtube-nocookie.com/embed/' + id;
   } else if (platform === 'TikTok') {
     const match = url.pathname.match(/\/video\/(\d+)/);
     if (!match) throw new Error('TikTok share link resolve नहीं हुआ। Browser में video खोलकर उसका पूरा URL copy करें।');
