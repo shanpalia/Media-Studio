@@ -78,3 +78,5 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
 .platform-preview .hint{margin:12px 0 0;line-height:1.5}
 #loadUrl{min-width:132px}
 @media(max-width:600px){.platform-preview{padding:11px}.platform-preview-heading{align-items:flex-start;flex-direction:column;gap:4px}.platform-frame-wrap{aspect-ratio:9/16;max-width:360px}}
+
+.url-download-options{margin-top:18px;padding:16px;border:1px solid #dceee6;border-radius:15px;background:#f8fdf9}.url-options-heading{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}.url-options-heading b{font-size:14px;color:#20382f}.url-options-heading span{font-size:11px;color:#789087}.url-option-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.url-option-grid select{width:100%;min-width:0}.url-download-options .convert{margin-top:12px;width:100%}@media(max-width:560px){.url-option-grid{grid-template-columns:1fr}}
