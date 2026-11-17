@@ -102,6 +102,7 @@ def info(url: str = Query(..., max_length=2048)):
                 "height": item.get("height"),
                 "width": item.get("width"),
                 "filesize": item.get("filesize") or item.get("filesize_approx"),
+                "abr": item.get("abr") or item.get("tbr"),
                 "vcodec": item.get("vcodec"),
                 "acodec": item.get("acodec"),
             })
