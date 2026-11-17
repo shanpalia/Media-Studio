@@ -39,3 +39,5 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
     padding-bottom: 30px;
   }
 }
+
+.copy-status{min-height:18px;margin:9px 0 0;text-align:center;color:#0a936c;font-size:11px;font-weight:700}
