@@ -151,13 +151,23 @@ $('loadUrl').addEventListener('click', async () => {
     if (platformName(value)) throw new Error('This social URL is not a direct media file. Use an official export and upload the file.');
     $('loadUrl').disabled = true;
     $('loadUrl').textContent = 'Loading…';
-    const response = await fetch(value);
-    if (!response.ok) throw new Error('Source returned ' + response.status);
-    const blob = await response.blob();
-    if (!blob.type.startsWith('video/') && !blob.type.startsWith('audio/')) {
-      throw new Error('URL did not return a recognized media file');
+    $('platformNote').textContent = 'Fetching the direct media file securely…';
+    $('platformNote').classList.remove('hidden');
+    const proxyUrl = 'https://media-studio.shanpalia786.workers.dev/api/fetch-media?url=' + encodeURIComponent(url.toString());
+    const response = await fetch(proxyUrl);
+    const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+    if (!response.ok) {
+      const problem = contentType.includes('application/json') ? await response.json().catch(() => ({})) : {};
+      throw new Error(problem.error || 'Could not fetch media (HTTP ' + response.status + ').');
     }
-    setFile(blob, decodeURIComponent(url.pathname.split('/').pop() || 'remote-media'));
+    const blob = await response.blob();
+    if (!blob.size || !(blob.type.startsWith('video/') || blob.type.startsWith('audio/') || blob.type === 'application/octet-stream')) {
+      throw new Error('URL did not return a recognized audio/video file.');
+    }
+    const fileName = decodeURIComponent(url.pathname.split('/').pop() || 'remote-media').replace(/[^a-zA-Z0-9._-]/g, '_');
+    setFile(blob, fileName);
+    $('platformNote').textContent = 'Media URL loaded successfully. You can now preview or convert it.';
+
   } catch (error) {
     $('platformNote').textContent = error.message + ' (The host may block browser CORS access.)';
     $('platformNote').classList.remove('hidden');
