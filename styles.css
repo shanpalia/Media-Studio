@@ -96,3 +96,17 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
 .site-footer .footer-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;max-width:1080px;margin:18px auto 0;padding-top:14px;border-top:1px solid #dcebe3;color:#789087;font-size:11px}
 .site-footer .footer-bottom b{color:#315b49}.brand-nav a{margin-right:16px}
 @media(max-width:600px){.site-footer{margin-top:36px!important;padding:24px 18px 16px!important}.site-footer .footer-main{grid-template-columns:1fr;gap:9px}.site-footer .footer-tagline{font-size:12px}.site-footer .footer-links{gap:12px 17px}.site-footer .footer-bottom{flex-direction:column;gap:6px}}
+
+
+/* Branded source switcher tabs */
+.studio-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:7px;margin:0 0 22px;border:1px solid #dcefe5;border-radius:17px;background:linear-gradient(135deg,#f2fbf6,#eaf7f0)}
+.studio-tabs .tab{position:relative;display:flex;align-items:center;gap:11px;min-height:76px;padding:12px 14px;text-align:left;border:1px solid transparent;border-radius:13px;color:#688276;background:transparent;transition:all .18s ease}
+.studio-tabs .tab.active{color:#075e4b;background:#fff;border-color:#ccebdd;box-shadow:0 5px 16px rgba(8,125,104,.10)}
+.studio-tabs .tab-icon{flex:0 0 38px;width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:#e2f8ec;color:#078665;font-size:22px;font-weight:800}
+.studio-tabs .tab-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+.studio-tabs .tab-copy strong{font-size:13px;line-height:1.2;color:inherit}
+.studio-tabs .tab-copy small{font-size:10px;font-weight:500;color:#82978d;white-space:normal}
+.studio-tabs .tab-arrow{margin-left:auto;align-self:flex-start;font-size:15px;color:#8ba99a}
+.studio-tabs .tab.active .tab-icon{background:linear-gradient(135deg,#c9f7df,#e8fbef);color:#087d68}
+.brand-mark svg{display:block;width:100%;height:100%}
+@media(max-width:560px){.studio-tabs{gap:7px;padding:5px}.studio-tabs .tab{min-height:72px;padding:9px 8px;gap:7px}.studio-tabs .tab-icon{width:32px;height:32px;flex-basis:32px;font-size:19px}.studio-tabs .tab-copy strong{font-size:11px}.studio-tabs .tab-copy small{font-size:9px}.studio-tabs .tab-arrow{font-size:12px}}
