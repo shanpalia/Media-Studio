@@ -292,6 +292,92 @@ $('convertBtn').addEventListener('click', async () => {
   }
 });
 
+let whisperPipelinePromise = null;
+async function getWhisperPipeline() {
+  if (!whisperPipelinePromise) {
+    whisperPipelinePromise = import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2')
+      .then(({ pipeline, env }) => {
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+        return pipeline('automatic-speech-recognition', 'onnx-community/whisper-tiny', {
+          dtype: 'q8',
+          device: 'wasm',
+          progress_callback: (event) => {
+            if (event.status === 'progress' && event.total) {
+              const pct = Math.round((event.loaded / event.total) * 100);
+              $('aiLyricsStatus').textContent = 'Downloading free AI model: ' + pct + '%';
+            } else if (event.status === 'done') {
+              $('aiLyricsStatus').textContent = 'AI model ready. Preparing audio…';
+            }
+          }
+        });
+      }).catch((error) => { whisperPipelinePromise = null; throw error; });
+  }
+  return whisperPipelinePromise;
+}
+
+async function getMonoAudio16k(blob) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) throw new Error('This browser cannot decode audio.');
+  const context = new AudioContextClass();
+  try {
+    const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+    selectedDuration = decoded.duration;
+    const targetRate = 16000;
+    const length = Math.ceil(decoded.duration * targetRate);
+    if (length > targetRate * 600) throw new Error('For this free mobile model, please use media shorter than 10 minutes.');
+    const mono = new Float32Array(length);
+    const channels = decoded.numberOfChannels;
+    for (let ch = 0; ch < channels; ch++) {
+      const source = decoded.getChannelData(ch);
+      for (let i = 0; i < length; i++) {
+        const sourceIndex = i * decoded.sampleRate / targetRate;
+        const left = Math.floor(sourceIndex);
+        const fraction = sourceIndex - left;
+        const a = source[Math.min(left, source.length - 1)] || 0;
+        const b = source[Math.min(left + 1, source.length - 1)] || 0;
+        mono[i] += (a + (b - a) * fraction) / channels;
+      }
+    }
+    return mono;
+  } finally {
+    await context.close();
+  }
+}
+
+$('generateLyrics').addEventListener('click', async () => {
+  if (!selectedBlob) {
+    $('aiLyricsStatus').textContent = 'Please upload an audio or video file in the Converter section first.';
+    return;
+  }
+  const button = $('generateLyrics');
+  button.disabled = true;
+  $('aiLyricsStatus').textContent = 'Loading free on-device AI model…';
+  try {
+    const transcriber = await getWhisperPipeline();
+    $('aiLyricsStatus').textContent = 'Reading audio from your file…';
+    const audio = await getMonoAudio16k(selectedBlob);
+    const language = $('lyricsLanguage').value;
+    $('aiLyricsStatus').textContent = 'Recognizing speech locally…';
+    const options = { chunk_length_s: 25, stride_length_s: 5, return_timestamps: false };
+    if (language !== 'auto') options.language = language;
+    const result = await transcriber(audio, options);
+    const text = (result.text || '').trim();
+    if (!text) throw new Error('No clear words were recognized. Music vocals may be difficult for AI to understand.');
+    $('lyricsText').value = text;
+    lyricLines = text.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+    $('lyricsPreview').textContent = text;
+    $('copyLyrics').disabled = false;
+    $('copySrt').disabled = false;
+    $('aiLyricsStatus').textContent = 'Lyrics generated. Review and edit the words, then copy them.';
+    $('copyStatus').textContent = '';
+  } catch (error) {
+    $('aiLyricsStatus').textContent = 'Could not generate lyrics: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 function srtTime(seconds) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
