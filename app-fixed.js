@@ -406,11 +406,17 @@ $('generateLyrics').addEventListener('click', async () => {
     if (!text) throw new Error('No clear words were recognized. Try a clearer audio file.');
     const latinLetters = (text.match(/[A-Za-z]/g) || []).length;
     const devanagariLetters = (text.match(/[\\u0900-\\u097F]/g) || []).length;
-    if (language === 'hindi' && latinLetters > devanagariLetters * 1.5 && latinLetters > 12) {
-      throw new Error('Hindi was selected, but the model returned mostly English text. This audio may contain English speech, or the free model could not recognize the Hindi vocals. Try Auto detect or a clearer audio clip.');
+    const otherScriptLetters = (text.match(/[\\u0B80-\\u0BFF\\u0600-\\u06FF\\u0900-\\u097F]/g) || []).length - devanagariLetters;
+    if (language === 'hindi' && (devanagariLetters < 3 || latinLetters > devanagariLetters * 1.5 || otherScriptLetters > devanagariLetters)) {
+      throw new Error('Hindi was selected, but the free AI could not recognize this audio in Devanagari Hindi. No incorrect text was inserted. Try a clearer Hindi speech/song clip or Auto detect.');
+    }
+    if (language === 'english' && latinLetters < 3) {
+      throw new Error('English was selected, but the AI did not return clear English text. Try a clearer clip or Auto detect.');
     }
     $('lyricsText').value = text;
-    $('aiLyricsStatus').textContent = 'Transcription ready. Please review the words; music lyrics may need manual correction.';
+    $('aiLyricsStatus').textContent = language === 'hindi'
+      ? 'Hindi transcription ready in Devanagari. Please review the words.'
+      : 'Transcription ready. Please review the words; music lyrics may need manual correction.';
   } catch (error) {
     $('aiLyricsStatus').textContent = 'Could not generate lyrics: ' + error.message;
   } finally {
