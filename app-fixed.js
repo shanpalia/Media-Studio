@@ -405,10 +405,15 @@ $('generateLyrics').addEventListener('click', async () => {
     const text = cleanWhisperRepetition(result.text || '');
     if (!text) throw new Error('No clear words were recognized. Try a clearer audio file.');
     const latinLetters = (text.match(/[A-Za-z]/g) || []).length;
-    const devanagariLetters = (text.match(/[\\u0900-\\u097F]/g) || []).length;
-    const otherScriptLetters = (text.match(/[\\u0B80-\\u0BFF\\u0600-\\u06FF\\u0900-\\u097F]/g) || []).length - devanagariLetters;
-    if (language === 'hindi' && (devanagariLetters < 3 || latinLetters > devanagariLetters * 1.5 || otherScriptLetters > devanagariLetters)) {
-      throw new Error('Hindi was selected, but the free AI could not recognize this audio in Devanagari Hindi. No incorrect text was inserted. Try a clearer Hindi speech/song clip or Auto detect.');
+    const devanagariLetters = (text.match(/[\u0900-\u097F]/g) || []).length;
+    const tamilLetters = (text.match(/[\u0B80-\u0BFF]/g) || []).length;
+    const arabicLetters = (text.match(/[\u0600-\u06FF]/g) || []).length;
+    const totalLetters = (text.match(/[\p{L}]/gu) || []).length;
+    if (language === 'hindi') {
+      const hindiShare = totalLetters ? devanagariLetters / totalLetters : 0;
+      if (devanagariLetters < 3 || hindiShare < 0.65 || tamilLetters > 0 || arabicLetters > 0 || latinLetters > devanagariLetters * 0.35) {
+        throw new Error('Hindi audio was not recognized correctly. The AI returned another script or unclear words, so the Lyrics box was left unchanged. Try a clearer Hindi speech clip; songs with loud music may not be recognized reliably.');
+      }
     }
     if (language === 'english' && latinLetters < 3) {
       throw new Error('English was selected, but the AI did not return clear English text. Try a clearer clip or Auto detect.');
