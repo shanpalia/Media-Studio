@@ -310,29 +310,50 @@ function saveText(filename, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-$('previewLyrics').addEventListener('click', () => {
-  lyricLines = $('lyricsText').value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  $('lyricsPreview').textContent = lyricLines.length
-    ? lyricLines.slice(0, 3).join('\n') + (lyricLines.length > 3 ? '\n…' : '')
-    : 'Paste lyrics first.';
-  $('downloadSrt').disabled = !lyricLines.length;
-  $('downloadTxt').disabled = !lyricLines.length;
-});
-
-$('downloadSrt').addEventListener('click', () => {
-  if (!lyricLines.length) return;
+function buildSrt() {
+  if (!lyricLines.length) return '';
   const choice = $('lineSeconds').value;
   const useMediaDuration = choice === 'match' && selectedDuration > 0;
   const secondsPerLine = choice === 'match' ? 3 : Number(choice);
   const totalDuration = useMediaDuration ? selectedDuration : lyricLines.length * secondsPerLine;
   const interval = totalDuration / lyricLines.length;
-  const content = lyricLines.map((line, index) => {
-    return (index + 1) + '\n' + srtTime(index * interval) + ' --> ' +
-      srtTime((index + 1) * interval) + '\n' + line;
-  }).join('\n\n');
-  saveText('media-studio-lyrics.srt', content, 'application/x-subrip;charset=utf-8');
+  return lyricLines.map((line, index) => {
+    return (index + 1) + '\\n' + srtTime(index * interval) + ' --> ' +
+      srtTime((index + 1) * interval) + '\\n' + line;
+  }).join('\\n\\n');
+}
+
+$('previewLyrics').addEventListener('click', () => {
+  lyricLines = $('lyricsText').value.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+  $('lyricsPreview').textContent = lyricLines.length
+    ? lyricLines.join('\\n')
+    : 'Paste lyrics first.';
+  $('copyLyrics').disabled = !lyricLines.length;
+  $('copySrt').disabled = !lyricLines.length;
+  $('copyStatus').textContent = '';
 });
 
-$('downloadTxt').addEventListener('click', () => {
-  saveText('media-studio-lyrics.txt', lyricLines.join('\n'), 'text/plain;charset=utf-8');
-});
+async function copyToClipboard(value, label) {
+  if (!value) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+    } else {
+      const temporary = document.createElement('textarea');
+      temporary.value = value;
+      temporary.style.position = 'fixed';
+      temporary.style.opacity = '0';
+      document.body.append(temporary);
+      temporary.select();
+      const copied = document.execCommand('copy');
+      temporary.remove();
+      if (!copied) throw new Error('Copy not available');
+    }
+    $('copyStatus').textContent = label + ' copied. Paste it anywhere.';
+  } catch (error) {
+    $('copyStatus').textContent = 'Could not copy automatically. Please select and copy the text.';
+  }
+}
+
+$('copyLyrics').addEventListener('click', () => copyToClipboard(lyricLines.join('\\n'), 'Lyrics'));
+$('copySrt').addEventListener('click', () => copyToClipboard(buildSrt(), 'SRT subtitles'));
