@@ -184,14 +184,56 @@ async function ensureFFmpegLoaded() {
   return loadPromise;
 }
 
-window.addEventListener('load', () => {
-  const warmUp = () => ensureFFmpegLoaded().catch((error) => console.warn('Converter preload failed:', error));
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(warmUp, { timeout: 2500 });
-  } else {
-    setTimeout(warmUp, 1200);
+// FFmpeg is loaded only for MP4. MP3 uses a lightweight browser encoder.
+
+let lamePromise = null;
+function loadLameEncoder() {
+  if (window.lamejs) return Promise.resolve(window.lamejs);
+  if (!lamePromise) {
+    lamePromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+      script.onload = () => window.lamejs ? resolve(window.lamejs) : reject(new Error('MP3 encoder did not initialize'));
+      script.onerror = () => reject(new Error('Could not load the lightweight MP3 encoder. Check your internet connection.'));
+      document.head.append(script);
+    }).catch((error) => { lamePromise = null; throw error; });
   }
-});
+  return lamePromise;
+}
+
+async function convertToMp3(blob, bitrate) {
+  const lame = await loadLameEncoder();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) throw new Error('This browser does not support audio decoding.');
+  const context = new AudioContextClass();
+  try {
+    const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer());
+    const channels = Math.min(2, audioBuffer.numberOfChannels);
+    const encoder = new lame.Mp3Encoder(channels, audioBuffer.sampleRate, Number.parseInt(bitrate, 10));
+    const left = audioBuffer.getChannelData(0);
+    const right = channels === 2 ? audioBuffer.getChannelData(1) : null;
+    const blockSize = 1152;
+    const chunks = [];
+    for (let offset = 0; offset < audioBuffer.length; offset += blockSize) {
+      const end = Math.min(offset + blockSize, audioBuffer.length);
+      const l = new Int16Array(end - offset);
+      const r = channels === 2 ? new Int16Array(end - offset) : null;
+      for (let i = offset; i < end; i++) {
+        const n = i - offset;
+        l[n] = Math.max(-32768, Math.min(32767, left[i] * 32767));
+        if (r) r[n] = Math.max(-32768, Math.min(32767, right[i] * 32767));
+      }
+      const encoded = channels === 2 ? encoder.encodeBuffer(l, r) : encoder.encodeBuffer(l);
+      if (encoded.length) chunks.push(new Uint8Array(encoded));
+      progress((end / audioBuffer.length) * 100);
+    }
+    const finalChunk = encoder.flush();
+    if (finalChunk.length) chunks.push(new Uint8Array(finalChunk));
+    return new Blob(chunks, { type: 'audio/mpeg' });
+  } finally {
+    await context.close();
+  }
+}
 
 $('convertBtn').addEventListener('click', async () => {
   if (!selectedBlob) return;
@@ -201,7 +243,7 @@ $('convertBtn').addEventListener('click', async () => {
   button.disabled = true;
   $('result').classList.add('hidden');
   $('progressWrap').classList.remove('hidden');
-  $('progressText').textContent = 'Loading browser converter…';
+  $('progressText').textContent = format === 'mp3' ? 'Preparing MP3 encoder…' : 'Loading MP4 converter…';
   progress(0);
 
   const extension = (selectedName.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
@@ -209,15 +251,21 @@ $('convertBtn').addEventListener('click', async () => {
   const outputName = format === 'mp3' ? 'media-studio-audio.mp3' : 'media-studio-video.mp4';
 
   try {
-    await ensureFFmpegLoaded();
-    $('progressText').textContent = 'Converting media…';
-    await ffmpeg.writeFile(inputName, new Uint8Array(await selectedBlob.arrayBuffer()));
-    const args = format === 'mp3'
-      ? ['-i', inputName, '-vn', '-codec:a', 'libmp3lame', '-b:a', quality, outputName]
-      : ['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', '-movflags', '+faststart', outputName];
-    await ffmpeg.exec(args);
-    const data = await ffmpeg.readFile(outputName);
-    const blob = new Blob([data.buffer], { type: format === 'mp3' ? 'audio/mpeg' : 'video/mp4' });
+    let blob;
+    if (format === 'mp3') {
+      $('progressText').textContent = 'Preparing lightweight MP3 encoder…';
+      blob = await convertToMp3(selectedBlob, quality);
+    } else {
+      $('progressText').textContent = 'Loading MP4 converter…';
+      await ensureFFmpegLoaded();
+      $('progressText').textContent = 'Converting video…';
+      await ffmpeg.writeFile(inputName, new Uint8Array(await selectedBlob.arrayBuffer()));
+      await ffmpeg.exec(['-i', inputName, '-c:v', 'libx264', '-preset', 'ultrafast', '-threads', '1', '-c:a', 'aac', '-movflags', '+faststart', outputName]);
+      const data = await ffmpeg.readFile(outputName);
+      blob = new Blob([data.buffer], { type: 'video/mp4' });
+      await ffmpeg.deleteFile(inputName);
+      await ffmpeg.deleteFile(outputName);
+    }
     if (outputUrl) URL.revokeObjectURL(outputUrl);
     outputUrl = URL.createObjectURL(blob);
 
@@ -235,8 +283,6 @@ $('convertBtn').addEventListener('click', async () => {
     $('result').classList.remove('hidden');
     $('progressText').textContent = 'Conversion complete';
     progress(100);
-    await ffmpeg.deleteFile(inputName);
-    await ffmpeg.deleteFile(outputName);
   } catch (error) {
     $('progressText').textContent = 'Conversion failed';
     $('result').textContent = 'Could not convert this file: ' + error.message;
