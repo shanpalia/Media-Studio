@@ -121,7 +121,7 @@ dropzone.addEventListener('drop', (event) => {
 
 function platformName(value) {
   try {
-    const host = new URL(value).hostname.replace(/^www\\./, '').toLowerCase();
+    const host = new URL(value).hostname.replace(/^www[.]/, '').toLowerCase();
     if (host === 'youtu.be' || host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) return 'YouTube';
     if (host === 'fb.watch' || host.endsWith('facebook.com') || host.endsWith('m.facebook.com')) return 'Facebook';
     if (host.endsWith('instagram.com')) return 'Instagram';
@@ -136,7 +136,7 @@ function platformName(value) {
 
 function socialVideoEmbed(value) {
   const url = new URL(value);
-  const host = url.hostname.replace(/^www\\./, '').toLowerCase();
+  const host = url.hostname.replace(/^www[.]/, '').toLowerCase();
   let platform = platformName(value);
   let embedUrl = '';
   if (platform === 'YouTube') {
