@@ -18,6 +18,40 @@ export default {
     if (url.pathname === "/api/health" && request.method === "GET") {
       return json({ ok: true, service: "Media Studio Speech-to-Text", configured: Boolean(env.GROQ_API_KEY) }, 200, headers);
     }
+    if (url.pathname === "/api/translate" && request.method === "POST") {
+      if (!env.GROQ_API_KEY) return json({ error: "Groq API key is not configured." }, 503, headers);
+      try {
+        const body = await request.json();
+        const text = String(body.text || "").trim();
+        const targetLanguage = String(body.targetLanguage || "").trim();
+        const sourceLanguage = String(body.sourceLanguage || "auto-detected").trim();
+        const allowedLanguages = ["Hindi", "English", "Urdu", "Arabic", "Bengali", "Punjabi", "Tamil", "Telugu", "Marathi", "Gujarati", "Spanish", "French"];
+        if (!text) return json({ error: "Please provide lyrics to translate." }, 400, headers);
+        if (text.length > 12000) return json({ error: "Lyrics are too long. Please translate up to 12,000 characters at a time." }, 413, headers);
+        if (!allowedLanguages.includes(targetLanguage)) return json({ error: "Unsupported target language." }, 400, headers);
+        const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + env.GROQ_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: "Translate song lyrics faithfully into the requested target language. Preserve meaning, emotion, line breaks, names and poetic tone. Do not summarize, explain, add commentary, or censor ordinary artistic language. Return only the translated lyrics. For Hindi, use Devanagari script; for Urdu, use Urdu script; for English, use Latin script." },
+              { role: "user", content: "Source language: " + sourceLanguage + "\\nTarget language: " + targetLanguage + "\\n\\nLyrics:\\n" + text }
+            ]
+          })
+        });
+        const result = await upstream.json().catch(() => ({}));
+        if (!upstream.ok) {
+          const status = upstream.status === 429 ? 429 : (upstream.status >= 500 ? 502 : upstream.status);
+          return json({ error: result.error?.message || "Translation failed." }, status, headers);
+        }
+        const translation = result.choices?.[0]?.message?.content?.trim() || "";
+        return json({ translation }, 200, headers);
+      } catch (error) {
+        return json({ error: error?.message || "Unable to translate lyrics." }, 500, headers);
+      }
+    }
     if (url.pathname !== "/api/transcribe") return json({ error: "Not found" }, 404, headers);
     if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, headers);
     if (!env.GROQ_API_KEY) return json({ error: "Groq API key is not configured." }, 503, headers);
