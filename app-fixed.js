@@ -147,15 +147,15 @@ function socialVideoEmbed(value) {
     if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) throw new Error('YouTube video link पहचान नहीं पाया। पूरा video URL डालें।');
     embedUrl = 'https://www.youtube-nocookie.com/embed/' + id;
   } else if (platform === 'TikTok') {
-    const match = url.pathname.match(/\\/video\\/(\\d+)/);
+    const match = url.pathname.match(/\/video\/(\d+)/);
     if (!match) throw new Error('TikTok share link resolve नहीं हुआ। Browser में video खोलकर उसका पूरा URL copy करें।');
     embedUrl = 'https://www.tiktok.com/player/v1/' + match[1] + '?music_info=1&description=1';
   } else if (platform === 'Instagram') {
-    const match = url.pathname.match(/^\\/(p|reel|tv)\\/([A-Za-z0-9_-]+)/);
+    const match = url.pathname.match(/^\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
     if (!match) throw new Error('Instagram post या reel का पूरा public link डालें।');
     embedUrl = 'https://www.instagram.com/' + match[1] + '/' + match[2] + '/embed';
   } else if (platform === 'Facebook') {
-    if (!/(videos|watch|reel|posts|permalink|video\\.php)/i.test(url.pathname)) throw new Error('Facebook का पूरा public video/post link डालें।');
+    if (!/(videos|watch|reel|posts|permalink|video\.php)/i.test(url.pathname)) throw new Error('Facebook का पूरा public video/post link डालें।');
     embedUrl = 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url.toString()) + '&show_text=false&width=560';
   } else {
     return null;
