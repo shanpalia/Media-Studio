@@ -28,6 +28,9 @@ function progress(percent) {
 }
 
 function setFile(blob, name) {
+  $('aiLyricsStatus').textContent = 'Media ready. Tap Generate Lyrics Automatically to transcribe this file.';
+  $('lyricsText').value = '';
+
   selectedBlob = blob;
   selectedName = name || 'media';
   selectedDuration = 0;
@@ -381,7 +384,7 @@ $('generateLyrics').addEventListener('click', async () => {
   }
   const button = $('generateLyrics');
   button.disabled = true;
-  $('aiLyricsStatus').textContent = 'Loading free on-device AI model…';
+  $('aiLyricsStatus').textContent = 'Starting free AI transcription…';
   try {
     const transcriber = await getWhisperPipeline();
     $('aiLyricsStatus').textContent = 'Reading audio from your file…';
