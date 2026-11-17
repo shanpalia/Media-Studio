@@ -33,7 +33,7 @@ export default {
           method: "POST",
           headers: { "Authorization": "Bearer " + env.GROQ_API_KEY, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
+            model: "openai/gpt-oss-120b",
             temperature: 0.2,
             messages: [
               { role: "system", content: "Translate song lyrics faithfully into the requested target language. Preserve meaning, emotion, line breaks, names and poetic tone. Do not summarize, explain, add commentary, or censor ordinary artistic language. Return only the translated lyrics. For Hindi, use Devanagari script; for Urdu, use Urdu script; for English, use Latin script." },
