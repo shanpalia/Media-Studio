@@ -316,6 +316,35 @@ async function getWhisperPipeline() {
   return whisperPipelinePromise;
 }
 
+function cleanWhisperRepetition(raw) {
+  const words = raw.replace(/\\s+/g, ' ').trim().split(' ');
+  if (words.length < 12) return raw.trim();
+  // Whisper can loop a short phrase repeatedly on music. Keep at most two
+  // consecutive copies of the same phrase when the loop is clearly runaway.
+  for (let size = 3; size <= Math.min(18, Math.floor(words.length / 3)); size++) {
+    let bestStart = -1;
+    let bestRepeats = 0;
+    for (let start = 0; start + size * 3 <= words.length; start++) {
+      let repeats = 1;
+      while (start + (repeats + 1) * size <= words.length) {
+        const a = words.slice(start, start + size).join(' ').toLowerCase();
+        const b = words.slice(start + repeats * size, start + (repeats + 1) * size).join(' ').toLowerCase();
+        if (a !== b) break;
+        repeats++;
+      }
+      if (repeats > bestRepeats) {
+        bestRepeats = repeats;
+        bestStart = start;
+      }
+    }
+    if (bestRepeats >= 4 && bestStart >= 0) {
+      words.splice(bestStart + size * 2, size * (bestRepeats - 2));
+      break;
+    }
+  }
+  return words.join(' ').trim();
+}
+
 async function getMonoAudio16k(blob) {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextClass) throw new Error('This browser cannot decode audio.');
@@ -359,10 +388,18 @@ $('generateLyrics').addEventListener('click', async () => {
     const audio = await getMonoAudio16k(selectedBlob);
     const language = $('lyricsLanguage').value;
     $('aiLyricsStatus').textContent = 'Recognizing speech locally…';
-    const options = { chunk_length_s: 25, stride_length_s: 5, return_timestamps: false };
+    const options = {
+      chunk_length_s: 20,
+      stride_length_s: 4,
+      return_timestamps: false,
+      task: 'transcribe',
+      repetition_penalty: 1.15,
+      no_repeat_ngram_size: 3,
+      max_new_tokens: 192
+    };
     if (language !== 'auto') options.language = language;
     const result = await transcriber(audio, options);
-    const text = (result.text || '').trim();
+    const text = cleanWhisperRepetition(result.text || '');
     if (!text) throw new Error('No clear words were recognized. Music vocals may be difficult for AI to understand.');
     $('lyricsText').value = text;
     lyricLines = text.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
