@@ -121,37 +121,115 @@ dropzone.addEventListener('drop', (event) => {
 
 function platformName(value) {
   try {
-    const host = new URL(value).hostname.replace(/^www\./, '');
-    if (host.includes('youtube') || host === 'youtu.be') return 'YouTube';
-    if (host.includes('facebook') || host === 'fb.watch') return 'Facebook';
-    if (host.includes('instagram')) return 'Instagram';
-    if (host.includes('tiktok')) return 'TikTok';
-    if (host.includes('twitter') || host.includes('x.com')) return 'X';
-    if (host.includes('vimeo')) return 'Vimeo';
+    const host = new URL(value).hostname.replace(/^www\\./, '').toLowerCase();
+    if (host === 'youtu.be' || host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) return 'YouTube';
+    if (host === 'fb.watch' || host.endsWith('facebook.com') || host.endsWith('m.facebook.com')) return 'Facebook';
+    if (host.endsWith('instagram.com')) return 'Instagram';
+    if (host.endsWith('tiktok.com') || host === 'vm.tiktok.com' || host === 'vt.tiktok.com') return 'TikTok';
+    if (host.endsWith('twitter.com') || host.endsWith('x.com')) return 'X';
+    if (host.endsWith('vimeo.com')) return 'Vimeo';
   } catch (error) {
     return '';
   }
   return '';
 }
 
+function socialVideoEmbed(value) {
+  const url = new URL(value);
+  const host = url.hostname.replace(/^www\\./, '').toLowerCase();
+  let platform = platformName(value);
+  let embedUrl = '';
+  if (platform === 'YouTube') {
+    let id = '';
+    if (host === 'youtu.be') id = url.pathname.split('/').filter(Boolean)[0] || '';
+    else if (url.pathname.startsWith('/shorts/') || url.pathname.startsWith('/live/') || url.pathname.startsWith('/embed/')) id = url.pathname.split('/')[2] || '';
+    else id = url.searchParams.get('v') || '';
+    if (!/^[A-Za-z0-9_-]{6,20}$/.test(id)) throw new Error('YouTube video link पहचान नहीं पाया। पूरा video URL डालें।');
+    embedUrl = 'https://www.youtube-nocookie.com/embed/' + id;
+  } else if (platform === 'TikTok') {
+    const match = url.pathname.match(/\\/video\\/(\\d+)/);
+    if (!match) throw new Error('TikTok share link resolve नहीं हुआ। Browser में video खोलकर उसका पूरा URL copy करें।');
+    embedUrl = 'https://www.tiktok.com/player/v1/' + match[1] + '?music_info=1&description=1';
+  } else if (platform === 'Instagram') {
+    const match = url.pathname.match(/^\\/(p|reel|tv)\\/([A-Za-z0-9_-]+)/);
+    if (!match) throw new Error('Instagram post या reel का पूरा public link डालें।');
+    embedUrl = 'https://www.instagram.com/' + match[1] + '/' + match[2] + '/embed';
+  } else if (platform === 'Facebook') {
+    if (!/(videos|watch|reel|posts|permalink|video\\.php)/i.test(url.pathname)) throw new Error('Facebook का पूरा public video/post link डालें।');
+    embedUrl = 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url.toString()) + '&show_text=false&width=560';
+  } else {
+    return null;
+  }
+  return { platform, embedUrl, originalUrl: url.toString() };
+}
+
+function showSocialPreview(info) {
+  const box = $('platformPreview');
+  box.replaceChildren();
+  const heading = document.createElement('div');
+  heading.className = 'platform-preview-heading';
+  const title = document.createElement('strong');
+  title.textContent = info.platform + ' video preview';
+  const note = document.createElement('span');
+  note.textContent = 'Official embedded player';
+  heading.append(title, note);
+  const frameWrap = document.createElement('div');
+  frameWrap.className = 'platform-frame-wrap';
+  const frame = document.createElement('iframe');
+  frame.src = info.embedUrl;
+  frame.title = info.platform + ' video player';
+  frame.loading = 'lazy';
+  frame.referrerPolicy = 'strict-origin-when-cross-origin';
+  frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen';
+  frame.allowFullscreen = true;
+  frameWrap.append(frame);
+  const actions = document.createElement('div');
+  actions.className = 'platform-preview-actions';
+  const open = document.createElement('a');
+  open.className = 'button primary';
+  open.href = info.originalUrl;
+  open.target = '_blank';
+  open.rel = 'noopener noreferrer';
+  open.textContent = 'Open Original Video ↗';
+  actions.append(open);
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.textContent = 'अगर preview न खुले, तो वीडियो private, removed, region-restricted या platform login के पीछे हो सकता है। Original video खोलकर देखें।';
+  box.append(heading, frameWrap, actions, hint);
+  box.classList.remove('hidden');
+}
+
 $('mediaUrl').addEventListener('input', () => {
   const platform = platformName($('mediaUrl').value.trim());
   $('platformNote').textContent = platform
-    ? platform + ' page links are not direct media files. Use the platform official export/download feature, then upload the authorized file here.'
+    ? platform + ' link detected. Paste the full public video link, then press Preview Video.'
     : '';
   $('platformNote').classList.toggle('hidden', !platform);
+  if (!platform) $('platformPreview').classList.add('hidden');
 });
 
 $('loadUrl').addEventListener('click', async () => {
   const value = $('mediaUrl').value.trim();
-  if (!value) return;
+  if (!value) {
+    $('platformNote').textContent = 'Please paste a video or direct media URL first.';
+    $('platformNote').classList.remove('hidden');
+    return;
+  }
   try {
     const url = new URL(value);
-    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP/HTTPS direct media URLs are supported');
-    if (platformName(value)) throw new Error('This social URL is not a direct media file. Use an official export and upload the file.');
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP/HTTPS URLs are supported.');
+    const social = socialVideoEmbed(value);
+    if (social) {
+      $('platformNote').textContent = social.platform + ' link recognized. Loading official player…';
+      $('platformNote').classList.remove('hidden');
+      $('platformPreview').classList.add('hidden');
+      showSocialPreview(social);
+      $('platformNote').textContent = social.platform + ' link recognized. Preview is ready below.';
+      return;
+    }
     $('loadUrl').disabled = true;
     $('loadUrl').textContent = 'Loading…';
-    $('platformNote').textContent = 'Fetching the direct media file securely…';
+    $('platformNote').textContent = 'Fetching direct media file securely…';
     $('platformNote').classList.remove('hidden');
     const proxyUrl = 'https://media-studio.shanpalia786.workers.dev/api/fetch-media?url=' + encodeURIComponent(url.toString());
     const response = await fetch(proxyUrl);
@@ -167,13 +245,13 @@ $('loadUrl').addEventListener('click', async () => {
     const fileName = decodeURIComponent(url.pathname.split('/').pop() || 'remote-media').replace(/[^a-zA-Z0-9._-]/g, '_');
     setFile(blob, fileName);
     $('platformNote').textContent = 'Media URL loaded successfully. You can now preview or convert it.';
-
+    $('platformPreview').classList.add('hidden');
   } catch (error) {
-    $('platformNote').textContent = error.message + ' (The host may block browser CORS access.)';
+    $('platformNote').textContent = error.message + ' If this is a social link, make sure it is a full public video URL.';
     $('platformNote').classList.remove('hidden');
   } finally {
     $('loadUrl').disabled = false;
-    $('loadUrl').textContent = 'Download';
+    $('loadUrl').textContent = 'Preview Video';
   }
 });
 
