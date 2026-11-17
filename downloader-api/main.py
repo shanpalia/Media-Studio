@@ -118,6 +118,7 @@ def download(
     url: str = Query(..., max_length=2048),
     kind: str = "video",
     height: int = 720,
+    audio_quality: int = 192,
 ):
     if not valid_url(url):
         raise HTTPException(400, "Unsupported or invalid URL")
@@ -125,6 +126,8 @@ def download(
         raise HTTPException(400, "Invalid format")
     if height not in (360, 480, 720, 1080):
         raise HTTPException(400, "Invalid resolution")
+    if audio_quality not in (128, 192, 320):
+        raise HTTPException(400, "Invalid audio quality")
 
     temp_dir = tempfile.mkdtemp(prefix="msdl-")
     output = str(Path(temp_dir) / "%(title).80s.%(ext)s")
@@ -133,7 +136,7 @@ def download(
         "-o", output,
     ]
     if kind == "audio":
-        args += ["-x", "--audio-format", "mp3", "--audio-quality", "192K"]
+        args += ["-x", "--audio-format", "mp3", "--audio-quality", f"{audio_quality}K"]
     else:
         args += [
             "-f", f"bv*[height<={height}]+ba/b[height<={height}]/b",
