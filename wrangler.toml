@@ -1,0 +1,4 @@
+name = "media-studio"
+main = "worker/index.js"
+compatibility_date = "2026-11-17"
+workers_dev = true
