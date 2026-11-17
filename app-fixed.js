@@ -172,11 +172,11 @@ function socialVideoEmbed(value) {
     if (!/(videos|watch|reel|posts|permalink|video\.php)/i.test(url.pathname)) throw new Error('Facebook का पूरा public video/post link डालें।');
     embedUrl = 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent(url.toString()) + '&show_text=false&width=560';
   } else if (platform === 'Pinterest') {
-    const pinMatch = url.pathname.match(/\\/pin\\/(\\d+)/);
+    const pinMatch = url.pathname.match(/\/pin\/(\d+)/);
     if (!pinMatch) throw new Error('Pinterest का पूरा Pin link डालें।');
     embedUrl = 'https://assets.pinterest.com/ext/embed.html?id=' + pinMatch[1];
   } else if (platform === 'Threads') {
-    const threadMatch = url.pathname.match(/\\/@([A-Za-z0-9._]+)\\/post\\/([A-Za-z0-9_-]+)/);
+    const threadMatch = url.pathname.match(/\/@([A-Za-z0-9._]+)\/post\/([A-Za-z0-9_-]+)/);
     if (!threadMatch) throw new Error('Threads का पूरा public post link डालें।');
     embedUrl = 'https://www.threads.net/@' + threadMatch[1] + '/post/' + threadMatch[2] + '/embed';
   } else {
