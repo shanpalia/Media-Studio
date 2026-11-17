@@ -41,3 +41,9 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
 }
 
 .copy-status{min-height:18px;margin:9px 0 0;text-align:center;color:#0a936c;font-size:11px;font-weight:700}
+
+.auto-lyrics-panel{margin:14px 0;padding:14px;border:1px solid #dcefe4;border-radius:14px;background:#f5fcf7}
+.auto-lyrics-panel .button{width:100%;min-height:48px}
+.auto-lyrics-panel .field-label{display:block;margin-top:12px}
+.ai-lyrics-status{font-size:11px;line-height:1.6;color:#668276;margin-top:9px}
+#generateLyrics:disabled{opacity:.65;cursor:wait}
