@@ -120,6 +120,7 @@ def download(
     kind: str = "video",
     height: int = 720,
     audio_quality: int = 192,
+    format_id: str | None = None,
 ):
     if not valid_url(url):
         raise HTTPException(400, "Unsupported or invalid URL")
@@ -129,6 +130,8 @@ def download(
         raise HTTPException(400, "Invalid resolution")
     if audio_quality not in (128, 192, 320):
         raise HTTPException(400, "Invalid audio quality")
+    if format_id is not None and (len(format_id) > 40 or not all(ch.isalnum() or ch in "._+-" for ch in format_id)):
+        raise HTTPException(400, "Invalid format selection")
 
     temp_dir = tempfile.mkdtemp(prefix="msdl-")
     output = str(Path(temp_dir) / "%(title).80s.%(ext)s")
@@ -139,8 +142,9 @@ def download(
     if kind == "audio":
         args += ["-x", "--audio-format", "mp3", "--audio-quality", f"{audio_quality}K"]
     else:
+        selected_format = f"{format_id}+bestaudio/{format_id}" if format_id else f"bv*[height<={height}]+ba/b[height<={height}]/b"
         args += [
-            "-f", f"bv*[height<={height}]+ba/b[height<={height}]/b",
+            "-f", selected_format,
             "--merge-output-format", "mp4",
         ]
 
