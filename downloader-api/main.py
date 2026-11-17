@@ -128,7 +128,7 @@ def download(
         raise HTTPException(400, "Unsupported or invalid URL")
     if kind not in ("video", "audio"):
         raise HTTPException(400, "Invalid format")
-    if height not in (360, 480, 720, 1080):
+    if height < 1 or height > 4320:
         raise HTTPException(400, "Invalid resolution")
     if audio_quality not in (128, 192, 320):
         raise HTTPException(400, "Invalid audio quality")
