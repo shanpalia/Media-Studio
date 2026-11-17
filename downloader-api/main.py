@@ -1,47 +1,156 @@
-import os, re, tempfile, subprocess, json
+import json
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from urllib.parse import urlparse
+from starlette.background import BackgroundTask
 
-app=FastAPI(title="Media Studio Downloader API")
-app.add_middleware(CORSMiddleware, allow_origins=["https://shanpalia.github.io"], allow_methods=["GET"], allow_headers=["*"])
-ALLOWED={"youtube.com","youtu.be","instagram.com","facebook.com","fb.watch","tiktok.com","threads.net","threads.com","pinterest.com","pin.it","x.com","twitter.com"}
-def valid_url(raw):
+app = FastAPI(title="Media Studio Downloader API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://shanpalia.github.io"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
+ALLOWED = {
+    "youtube.com", "youtu.be", "instagram.com", "facebook.com", "fb.watch",
+    "tiktok.com", "threads.net", "threads.com", "pinterest.com", "pin.it",
+    "x.com", "twitter.com",
+}
+
+
+def valid_url(raw: str) -> bool:
     try:
-        u=urlparse(raw); host=(u.hostname or "").lower()
-        return u.scheme in ("http","https") and any(host==d or host.endswith("."+d) for d in ALLOWED)
-    except: return False
-def run_ytdlp(args):
-    p=subprocess.run(["yt-dlp","--no-warnings","--no-playlist","--no-check-certificates","--socket-timeout","15"]+args,capture_output=True,text=True,timeout=90)
-    if p.returncode: raise HTTPException(422, (p.stderr or "This public URL is not downloadable by the supported extractor.")[-700:])
-    return p.stdout
+        parsed = urlparse(raw)
+        host = (parsed.hostname or "").lower()
+        return (
+            parsed.scheme in ("http", "https")
+            and not parsed.username
+            and not parsed.password
+            and any(host == domain or host.endswith("." + domain) for domain in ALLOWED)
+        )
+    except Exception:
+        return False
+
+
+def run_ytdlp(args: list[str]) -> str:
+    try:
+        proc = subprocess.run(
+            ["yt-dlp", "--no-warnings", "--no-playlist", "--socket-timeout", "20"]
+            + args,
+            capture_output=True,
+            text=True,
+            timeout=150,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Platform response timed out. Please try again.")
+    except FileNotFoundError:
+        raise HTTPException(503, "Downloader engine is temporarily unavailable.")
+
+    if proc.returncode:
+        error = (proc.stderr or proc.stdout or "Media could not be extracted.")[-1200:]
+        lower = error.lower()
+        if "cannot parse data" in lower and "facebook" in lower:
+            raise HTTPException(
+                503,
+                "Facebook is currently changing its video page format, so this link cannot be read right now. Try a public video/reel link later. Private, login-only and restricted posts are not supported.",
+            )
+        if any(term in lower for term in ("login", "cookies", "private", "not available", "sign in")):
+            raise HTTPException(
+                422,
+                "This post is private, login-protected, unavailable, or restricted. Only publicly accessible media is supported.",
+            )
+        raise HTTPException(422, "This platform could not provide the media. Try another public post link.")
+    return proc.stdout
+
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "Media Studio Downloader API", "health": "/health"}
+
+
 @app.get("/health")
-def health(): return {"ok":True,"service":"media-studio-downloader"}
+def health():
+    return {"ok": True, "service": "media-studio-downloader"}
+
+
 @app.get("/info")
-def info(url:str=Query(...,max_length=2048)):
-    if not valid_url(url): raise HTTPException(400,"Unsupported or invalid URL")
-    raw=run_ytdlp(["--dump-single-json","--skip-download",url])
-    try: d=json.loads(raw)
-    except: raise HTTPException(502,"Could not read media metadata")
-    fmts=[]
-    for f in d.get("formats",[]):
-        if f.get("url") and (f.get("vcodec")!="none" or f.get("acodec")!="none"):
-            fmts.append({"format_id":f.get("format_id"),"ext":f.get("ext"),"height":f.get("height"),"width":f.get("width"),"filesize":f.get("filesize") or f.get("filesize_approx"),"vcodec":f.get("vcodec"),"acodec":f.get("acodec")})
-    return {"title":d.get("title"),"duration":d.get("duration"),"thumbnail":d.get("thumbnail"),"extractor":d.get("extractor"),"formats":fmts[:60]}
+def info(url: str = Query(..., max_length=2048)):
+    if not valid_url(url):
+        raise HTTPException(400, "Unsupported or invalid URL")
+    raw = run_ytdlp(["--dump-single-json", "--skip-download", url])
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(502, "The platform returned unreadable media details.")
+
+    formats = []
+    for item in data.get("formats", []):
+        if item.get("url") and (
+            item.get("vcodec") != "none" or item.get("acodec") != "none"
+        ):
+            formats.append({
+                "format_id": item.get("format_id"),
+                "ext": item.get("ext"),
+                "height": item.get("height"),
+                "width": item.get("width"),
+                "filesize": item.get("filesize") or item.get("filesize_approx"),
+                "vcodec": item.get("vcodec"),
+                "acodec": item.get("acodec"),
+            })
+    return {
+        "title": data.get("title"),
+        "duration": data.get("duration"),
+        "thumbnail": data.get("thumbnail"),
+        "extractor": data.get("extractor"),
+        "formats": formats[:60],
+    }
+
+
 @app.get("/download")
-def download(url:str=Query(...,max_length=2048),kind:str="video",height:int=720):
-    if not valid_url(url): raise HTTPException(400,"Unsupported or invalid URL")
-    if kind not in ("video","audio"): raise HTTPException(400,"Invalid format")
-    if height not in (360,480,720,1080): raise HTTPException(400,"Invalid resolution")
-    tmp=tempfile.mkdtemp(prefix="msdl-")
-    out=str(Path(tmp)/"%(title).80s.%(ext)s")
-    args=["--no-playlist","--restrict-filenames","--max-filesize","300M","-o",out]
-    if kind=="audio": args += ["-x","--audio-format","mp3","--audio-quality","192K"]
-    else: args += ["-f",f"bv*[height<={height}]+ba/b[height<={height}]/b","--merge-output-format","mp4"]
-    run_ytdlp(args+[url])
-    paths=list(Path(tmp).glob("*"))
-    if not paths: raise HTTPException(502,"No output file produced")
-    path=paths[0]
-    return FileResponse(path,filename=path.name,background=None)
+def download(
+    url: str = Query(..., max_length=2048),
+    kind: str = "video",
+    height: int = 720,
+):
+    if not valid_url(url):
+        raise HTTPException(400, "Unsupported or invalid URL")
+    if kind not in ("video", "audio"):
+        raise HTTPException(400, "Invalid format")
+    if height not in (360, 480, 720, 1080):
+        raise HTTPException(400, "Invalid resolution")
+
+    temp_dir = tempfile.mkdtemp(prefix="msdl-")
+    output = str(Path(temp_dir) / "%(title).80s.%(ext)s")
+    args = [
+        "--no-playlist", "--restrict-filenames", "--max-filesize", "300M",
+        "-o", output,
+    ]
+    if kind == "audio":
+        args += ["-x", "--audio-format", "mp3", "--audio-quality", "192K"]
+    else:
+        args += [
+            "-f", f"bv*[height<={height}]+ba/b[height<={height}]/b",
+            "--merge-output-format", "mp4",
+        ]
+
+    try:
+        run_ytdlp(args + [url])
+        files = [path for path in Path(temp_dir).glob("*") if path.is_file()]
+        if not files:
+            raise HTTPException(502, "No downloadable file was produced.")
+        result = files[0]
+        return FileResponse(
+            result,
+            filename=result.name,
+            background=BackgroundTask(shutil.rmtree, temp_dir, ignore_errors=True),
+        )
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
