@@ -51,3 +51,7 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
 /* Keep the automatic lyrics action readable on narrow phones */
 .auto-lyrics-panel{min-width:0;box-sizing:border-box}
 #generateLyrics{white-space:normal;overflow-wrap:anywhere;line-height:1.35;padding:12px 14px;font-size:clamp(13px,3.7vw,16px);text-align:center;max-width:100%;box-sizing:border-box}
+
+/* Generate-only lyrics interface */
+.lyrics-studio textarea{min-height:190px}
+.auto-lyrics-panel{margin-bottom:16px}
