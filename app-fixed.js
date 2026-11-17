@@ -11,6 +11,7 @@ let previewUrl = null;
 let loaded = false;
 let loadPromise = null;
 let lyricLines = [];
+let detectedLanguage = '';
 
 $('year').textContent = new Date().getFullYear();
 
@@ -30,6 +31,9 @@ function progress(percent) {
 function setFile(blob, name) {
   $('aiLyricsStatus').textContent = 'Media ready. Tap Generate Lyrics Automatically to transcribe this file.';
   $('lyricsText').value = '';
+  $('translatedLyrics').value = '';
+  $('detectedLanguage').textContent = 'Detected song language: Waiting for audio…';
+  $('translateStatus').textContent = 'Original lyrics stay unchanged. Choose a language below to translate.';
 
   selectedBlob = blob;
   selectedName = name || 'media';
@@ -333,9 +337,47 @@ $('generateLyrics').addEventListener('click', async () => {
     const text = cleanTranscript(data.text);
     if (!text) throw new Error('No clear speech was recognized. Try a clearer clip with less background music.');
     $('lyricsText').value = text;
-    $('aiLyricsStatus').textContent = 'Speech recognized automatically. Language: ' + (data.language || 'Auto detected') + '. Review the transcript below.';
+    detectedLanguage = data.language || '';
+    const languageNames = { hindi: 'Hindi (हिंदी)', english: 'English', urdu: 'Urdu (اردو)', arabic: 'Arabic (العربية)', bengali: 'Bengali (বাংলা)', punjabi: 'Punjabi (ਪੰਜਾਬੀ)', spanish: 'Spanish', french: 'French' };
+    const detectedLabel = languageNames[String(detectedLanguage).toLowerCase()] || detectedLanguage || 'Auto detected';
+    $('detectedLanguage').textContent = 'Detected song language: ' + detectedLabel;
+    $('translatedLyrics').value = '';
+    $('aiLyricsStatus').textContent = 'Speech recognized. Original lyrics are shown in the detected language. You can translate them below.';
   } catch (error) {
     $('aiLyricsStatus').textContent = 'Could not generate text: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+
+$('translateLyrics').addEventListener('click', async () => {
+  const sourceText = $('lyricsText').value.trim();
+  const targetLanguage = $('targetLanguage').value;
+  if (!sourceText) {
+    $('translateStatus').textContent = 'First generate or paste the original lyrics above.';
+    return;
+  }
+  const button = $('translateLyrics');
+  button.disabled = true;
+  $('translateStatus').textContent = 'Translating lyrics into ' + targetLanguage + '…';
+  try {
+    const response = await fetch('https://media-studio.shanpalia786.workers.dev/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: sourceText, targetLanguage, sourceLanguage: detectedLanguage || 'auto-detected' })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 429) throw new Error('Translation rate limit reached. Please try again later.');
+      if (response.status === 503) throw new Error('Translation service is not configured. Check the Groq API secret.');
+      throw new Error(data.error || 'Translation failed (' + response.status + ').');
+    }
+    if (!data.translation) throw new Error('No translated text was returned.');
+    $('translatedLyrics').value = data.translation;
+    $('translateStatus').textContent = 'Translation complete: ' + targetLanguage + '. Original lyrics have not been changed.';
+  } catch (error) {
+    $('translateStatus').textContent = 'Could not translate: ' + error.message;
   } finally {
     button.disabled = false;
   }
