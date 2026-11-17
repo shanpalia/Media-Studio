@@ -55,3 +55,13 @@ footer{display:flex;justify-content:space-between;gap:18px;max-width:1120px;marg
 /* Generate-only lyrics interface */
 .lyrics-studio textarea{min-height:190px}
 .auto-lyrics-panel{margin-bottom:16px}
+
+/* Detected language and lyric translation */
+.detected-language{margin:14px 0 10px;padding:10px 12px;border:1px solid #d8eee2;border-radius:10px;background:#effaf3;color:#087d68;font-size:12px;font-weight:700}
+.translate-panel{margin-top:16px;padding:14px;border:1px solid #e0eee5;border-radius:14px;background:#fff}
+.translate-row{display:grid;grid-template-columns:1fr auto;gap:9px}
+.translate-row select{height:46px}
+#translateLyrics{min-height:46px}
+.translate-panel textarea{margin-top:8px;min-height:130px}
+@media(max-width:560px){.translate-row{grid-template-columns:1fr}.translate-row #translateLyrics{width:100%;min-height:46px}}
+#translateLyrics:disabled{opacity:.65;cursor:wait}
