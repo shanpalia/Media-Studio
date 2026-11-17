@@ -1,5 +1,6 @@
 import json
 import shutil
+import imageio_ffmpeg
 import subprocess
 import tempfile
 from pathlib import Path
@@ -42,7 +43,7 @@ def valid_url(raw: str) -> bool:
 def run_ytdlp(args: list[str]) -> str:
     try:
         proc = subprocess.run(
-            ["yt-dlp", "--no-warnings", "--no-playlist", "--socket-timeout", "20"]
+            ["yt-dlp", "--no-warnings", "--no-playlist", "--socket-timeout", "20", "--ffmpeg-location", imageio_ffmpeg.get_ffmpeg_exe()]
             + args,
             capture_output=True,
             text=True,
