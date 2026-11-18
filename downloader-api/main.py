@@ -55,7 +55,10 @@ def run_ytdlp(args: list[str]) -> str:
         raise HTTPException(503, "Downloader engine is temporarily unavailable.")
 
     if proc.returncode:
-        error = (proc.stderr or proc.stdout or "Media could not be extracted.")[-1200:]
+        error = (proc.stderr or proc.stdout or "Media could not be extracted.")[-1600:]
+        # Keep a useful diagnostic for public-link failures instead of masking
+        # every extractor problem behind the same generic message.
+        print(f"yt-dlp extraction failed: {error}", flush=True)
         lower = error.lower()
         if "cannot parse data" in lower and "facebook" in lower:
             raise HTTPException(
@@ -67,7 +70,12 @@ def run_ytdlp(args: list[str]) -> str:
                 422,
                 "This post is private, login-protected, unavailable, or restricted. Only publicly accessible media is supported.",
             )
-        raise HTTPException(422, "This platform could not provide the media. Try another public post link.")
+        detail = "This platform could not provide the media. "
+        if error.strip():
+            detail += error.strip()[-700:]
+        else:
+            detail += "Try another public post link."
+        raise HTTPException(422, detail)
     return proc.stdout
 
 
